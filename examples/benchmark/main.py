@@ -9,8 +9,11 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Callable, Optional, Tuple, List
 
-from fmnist import get_femnist, init_femnist
+from fmnist import 
 from divide_data import select_dataset
+from dataset_utils import get_cifar_10, do_fl_partitioning, get_dataloader, \
+    get_femnist, do_femnist_partitioning, \
+    femnistTransformation, cifar10Transformation
 
 from utils import Net, train, test
 
@@ -48,7 +51,7 @@ class FlowerClient(fl.client.NumPyClient):
         # Determine device
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        self.testing_sets, self.testing_sets = init_femnist(args)
+        # self.testing_sets, self.testing_sets = init_femnist(args)
 
 
 
@@ -60,17 +63,14 @@ class FlowerClient(fl.client.NumPyClient):
 
         # Load data for this client and get trainloader
         num_workers = len(ray.worker.get_resource_ids()["CPU"])
-        # trainloader = get_dataloader(
-        #     self.fed_dir,
-        #     self.cid,
-        #     is_train=True,
-        #     batch_size=config["batch_size"],
-        #     workers=num_workers,
-        # )
-        trainloader = select_dataset(self.cid, self.training_sets,
-                                        batch_size=config["batch_size"], args=self.args,
-                                        collate_fn=self.collate_fn
-                                        )
+        trainloader = get_dataloader(
+            self.fed_dir,
+            self.cid,
+            is_train=True,
+            batch_size=config["batch_size"],
+            workers=num_workers,
+            transform=femnistTransformation
+        )
 
         # Send model to device
         self.net.to(self.device)
@@ -82,6 +82,7 @@ class FlowerClient(fl.client.NumPyClient):
         return get_params(self.net), len(trainloader.dataset), {}
 
     def evaluate(self, parameters, config):
+        return float(0.0), len(10), {"accuracy": float(0.1)}
         set_params(self.net, parameters)
 
         # Load data for this client and get trainloader
@@ -89,11 +90,11 @@ class FlowerClient(fl.client.NumPyClient):
         # valloader = get_dataloader(
         #     self.fed_dir, self.cid, is_train=False, batch_size=50, workers=num_workers
         # )
-        valloader = select_dataset(self.cid, self.testing_sets,
-                                        batch_size=config["batch_size"], args=self.args,
-                                        collate_fn=self.collate_fn
-                                        )
-        # Send model to device
+        # valloader = select_dataset(self.cid, self.testing_sets,
+        #                                 batch_size=config["batch_size"], args=self.args,
+        #                                 collate_fn=self.collate_fn
+        #                                 )
+        # # Send model to device
         self.net.to(self.device)
 
         # Evaluate
@@ -177,27 +178,23 @@ if __name__ == "__main__":
     }  # each client will get allocated 1 CPUs
 
     # Download CIFAR-10 dataset
-    train_path, testset = get_femnist()
+    train_path, testset = get_femnist(path_to_data="./data", args=None)
 
     # partition dataset (use a large `alpha` to make it IID;
     # a small value (e.g. 1) will make it non-IID)
     # This will create a new directory called "federated": in the directory where
     # CIFAR-10 lives. Inside it, there will be N=pool_size sub-directories each with
     # its own train/set split.
-    fed_dir = do_fl_partitioning(
+    # fed_dir = do_fl_partitioning(
+    #     train_path, pool_size=pool_size, alpha=1000, num_classes=10, val_ratio=0.1
+    # )
+    fed_dir = do_femnist_partitioning(
         train_path, pool_size=pool_size, alpha=1000, num_classes=10, val_ratio=0.1
     )
 
+
+
     # configure the strategy
-    # strategy = fl.server.strategy.FedAvg(
-    #     fraction_fit=0.1,
-    #     fraction_evaluate=0.1,
-    #     min_fit_clients=10,
-    #     min_evaluate_clients=10,
-    #     min_available_clients=pool_size,  # All clients should be available
-    #     on_fit_config_fn=fit_config,
-    #     evaluate_fn=get_evaluate_fn(testset),  # centralised evaluation of global model
-    # )
     strategy = fl.server.strategy.FedAvg(
         fraction_fit=0.1,
         fraction_evaluate=0.1,
@@ -205,16 +202,21 @@ if __name__ == "__main__":
         min_evaluate_clients=10,
         min_available_clients=pool_size,  # All clients should be available
         on_fit_config_fn=fit_config,
-        evaluate_fn=get_evaluate_fn(""),  # centralised evaluation of global model
+        evaluate_fn=get_evaluate_fn(testset),  # centralised evaluation of global model
     )
-
-    # def client_fn(cid: str):
-    #     # create a single client instance
-    #     return FlowerClient(cid, fed_dir, args)
+    # strategy = fl.server.strategy.FedAvg(
+    #     fraction_fit=0.1,
+    #     fraction_evaluate=0.1,
+    #     min_fit_clients=100,
+    #     min_evaluate_clients=10,
+    #     min_available_clients=pool_size,  # All clients should be available
+    #     on_fit_config_fn=fit_config,
+    #     evaluate_fn=get_evaluate_fn(""),  # centralised evaluation of global model
+    # )
 
     def client_fn(cid: str):
         # create a single client instance
-        return FlowerClient(cid, "", args)
+        return FlowerClient(cid, fed_dir, args)
 
     # (optional) specify Ray config
     ray_init_args = {"include_dashboard": False}

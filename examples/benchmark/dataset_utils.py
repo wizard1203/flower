@@ -9,25 +9,51 @@ from torchvision.datasets import VisionDataset
 from typing import Callable, Optional, Tuple, Any
 from common import create_lda_partitions
 
-from divide_data import select_dataset
+from divide_data import select_dataset, Partition, DataPartitioner
+
+from femnist import FEMNIST
 
 
 
-def get_dataset(path_to_data: Path, cid: str, partition: str):
+
+
+def cifar10Transformation():
+
+    return transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+
+
+def femnistTransformation():
+
+    return transforms.Compose([
+        # transforms.Grayscale(num_output_channels=1),
+        transforms.Resize((28, 28)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+
+
+def get_dataset(path_to_data: Path, cid: str, partition: str, transform=cifar10Transformation()):
 
     # generate path to cid's data
     path_to_data = path_to_data / cid / (partition + ".pt")
 
-    return TorchVision_FL(path_to_data, transform=cifar10Transformation())
+    return TorchVision_FL(path_to_data, transform=transform)
 
 
 def get_dataloader(
-    path_to_data: str, cid: str, is_train: bool, batch_size: int, workers: int
+    path_to_data: str, cid: str, is_train: bool, batch_size: int, workers: int,
+    transform=cifar10Transformation()
 ):
     """Generates trainset/valset object and returns appropiate dataloader."""
 
     partition = "train" if is_train else "val"
-    dataset = get_dataset(Path(path_to_data), cid, partition)
+    dataset = get_dataset(Path(path_to_data), cid, partition, transform=transform)
 
     # we use as number of workers all the cpu cores assigned to this actor
     kwargs = {"num_workers": workers, "pin_memory": True, "drop_last": False}
@@ -115,14 +141,8 @@ def do_femnist_partitioning(path_to_dataset, pool_size, alpha, num_classes, args
     training_sets = DataPartitioner(
         data=train_dataset, args=args, numOfClass=args.num_class)
 
-    test_dataset = FEMNIST(
-        args.data_dir, dataset='test', transform=femnistTransformation())
-    testing_sets = DataPartitioner(
-        data=test_dataset, args=args, numOfClass=args.num_class, isTest=True)
-
     training_sets.partition_data_helper(
         num_clients=args.num_participants, data_map_file=args.data_map_file)
-    testing_sets.partition_data_helper(num_clients=1)
 
     splits_dir = path_to_dataset.parent / "federated"
     if splits_dir.exists():
@@ -130,33 +150,13 @@ def do_femnist_partitioning(path_to_dataset, pool_size, alpha, num_classes, args
     Path.mkdir(splits_dir, parents=True)
 
     for p in range(pool_size):
-        partition = partition.use(p, isTest=True)
+
+        partition_indexes = training_sets.partitions[p]
+        partition_data = training_sets.data[partition_indexes]
+
         with open(splits_dir / str(p) / "train.pt", "wb") as f:
-            torch.save(partition.data, f)
-
+            torch.save(partition_data, f)
     return splits_dir
-
-
-
-def cifar10Transformation():
-
-    return transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ]
-    )
-
-
-def femnistTransformation():
-
-    return transforms.Compose([
-        # transforms.Grayscale(num_output_channels=1),
-        transforms.Resize((28, 28)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
 
 
 
@@ -210,19 +210,22 @@ class TorchVision_FL(VisionDataset):
         return len(self.data)
 
 
-# def get_femnist(path_to_data="./data"):
-#     train_dataset = FEMNIST(
-#         args.data_dir, dataset='train', transform=train_transform)
-#     training_sets = DataPartitioner(
-#         data=train_dataset, args=args, numOfClass=args.num_class)
+def get_femnist(path_to_data="./data", args=None):
+    # data_dir is the original data dir
 
-#     test_dataset = FEMNIST(
-#         args.data_dir, dataset='test', transform=test_transform)
-#     testing_sets = DataPartitioner(
-#         data=test_dataset, args=args, numOfClass=args.num_class, isTest=True)
-    
-#     # returns path where training data is and testset
-#     return training_sets, testing_sets
+    testing_sets = FEMNIST(
+        args.data_dir, dataset='test', transform=femnistTransformation())
+    # testing_sets = DataPartitioner(
+    #     data=test_dataset, args=args, numOfClass=args.num_class, isTest=True)
+    # testing_sets.partition_data_helper(num_clients=1)
+
+    # fuse all data splits into a single "training.pt"
+    data_loc = Path(path_to_data) / "femnist"
+    train_path = data_loc / "training.pt"
+    # print("Generating unified CIFAR dataset")
+    # torch.save([train_set.data, np.array(train_set.targets)], training_data)
+
+    return train_path, testing_sets
 
 
 
