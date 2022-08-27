@@ -130,8 +130,11 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # device = torch.device(
+    #     "cuda:0" if torch.cuda.is_available() and args.use_cuda else "cpu"
+    # )
     device = torch.device(
-        "cuda:0" if torch.cuda.is_available() and args.use_cuda else "cpu"
+        "cuda:0"
     )
 
     if args.dry:

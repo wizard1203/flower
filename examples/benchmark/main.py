@@ -8,8 +8,14 @@ import numpy as np
 from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Callable, Optional, Tuple, List
-from dataset_utils import get_cifar_10, do_fl_partitioning, get_dataloader
+
+from fmnist import get_femnist, init_femnist
+from divide_data import select_dataset
+
 from utils import Net, train, test
+
+
+from resnet_torch import resnet18 as resnet18_torch
 
 
 parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
@@ -17,22 +23,33 @@ parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
 parser.add_argument("--num_client_cpus", type=int, default=1)
 parser.add_argument("--num_rounds", type=int, default=5)
 
+parser.add_argument("--data_dir", type=str, default="")
+parser.add_argument("--num_class", type=int, default=62)
+parser.add_argument("--num_participants", type=int, default=100)
+parser.add_argument("--data_map_file", type=str, default="")
+
+
+
+def Net():
+    return resnet18_torch(num_classes=62, in_channels=3)
+
 
 # Flower client, adapted from Pytorch quickstart example
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, cid: str, fed_dir_data: str):
+    def __init__(self, cid: str, fed_dir_data: str, args):
         self.cid = cid
         self.fed_dir = Path(fed_dir_data)
         self.properties: Dict[str, Scalar] = {"tensor_type": "numpy.ndarray"}
+        self.args = args
 
         # Instantiate model
         self.net = Net()
 
         # Determine device
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # device_id = int(self.cid) % 8
-        # print(f"device id: {device_id}")
-        # self.device = torch.device(f"cuda:{device_id}")
+
+        self.testing_sets, self.testing_sets = init_femnist(args)
+
 
 
     def get_parameters(self, config):
@@ -43,13 +60,17 @@ class FlowerClient(fl.client.NumPyClient):
 
         # Load data for this client and get trainloader
         num_workers = len(ray.worker.get_resource_ids()["CPU"])
-        trainloader = get_dataloader(
-            self.fed_dir,
-            self.cid,
-            is_train=True,
-            batch_size=config["batch_size"],
-            workers=num_workers,
-        )
+        # trainloader = get_dataloader(
+        #     self.fed_dir,
+        #     self.cid,
+        #     is_train=True,
+        #     batch_size=config["batch_size"],
+        #     workers=num_workers,
+        # )
+        trainloader = select_dataset(self.cid, self.training_sets,
+                                        batch_size=config["batch_size"], args=self.args,
+                                        collate_fn=self.collate_fn
+                                        )
 
         # Send model to device
         self.net.to(self.device)
@@ -65,10 +86,13 @@ class FlowerClient(fl.client.NumPyClient):
 
         # Load data for this client and get trainloader
         num_workers = len(ray.worker.get_resource_ids()["CPU"])
-        valloader = get_dataloader(
-            self.fed_dir, self.cid, is_train=False, batch_size=50, workers=num_workers
-        )
-
+        # valloader = get_dataloader(
+        #     self.fed_dir, self.cid, is_train=False, batch_size=50, workers=num_workers
+        # )
+        valloader = select_dataset(self.cid, self.testing_sets,
+                                        batch_size=config["batch_size"], args=self.args,
+                                        collate_fn=self.collate_fn
+                                        )
         # Send model to device
         self.net.to(self.device)
 
@@ -123,7 +147,12 @@ def get_evaluate_fn(
         # return statistics
         return loss, {"accuracy": accuracy}
 
-    return evaluate
+    def nothing(
+        server_round: int, parameters: fl.common.NDArrays, config: Dict[str, Scalar]
+    ):
+        return 0.0, {"accuracy": 0.0}
+
+    return nothing
 
 
 # Start simulation (a _default server_ will be created)
@@ -144,12 +173,11 @@ if __name__ == "__main__":
     pool_size = 1000  # number of dataset partions (= number of total clients)
     client_resources = {
         "num_cpus": args.num_client_cpus,
-        "num_gpus": 8,
         # "num_gpus": 0.5,
     }  # each client will get allocated 1 CPUs
 
     # Download CIFAR-10 dataset
-    train_path, testset = get_cifar_10()
+    train_path, testset = get_femnist()
 
     # partition dataset (use a large `alpha` to make it IID;
     # a small value (e.g. 1) will make it non-IID)
@@ -177,12 +205,16 @@ if __name__ == "__main__":
         min_evaluate_clients=10,
         min_available_clients=pool_size,  # All clients should be available
         on_fit_config_fn=fit_config,
-        evaluate_fn=get_evaluate_fn(testset),  # centralised evaluation of global model
+        evaluate_fn=get_evaluate_fn(""),  # centralised evaluation of global model
     )
+
+    # def client_fn(cid: str):
+    #     # create a single client instance
+    #     return FlowerClient(cid, fed_dir, args)
 
     def client_fn(cid: str):
         # create a single client instance
-        return FlowerClient(cid, fed_dir)
+        return FlowerClient(cid, "", args)
 
     # (optional) specify Ray config
     ray_init_args = {"include_dashboard": False}
