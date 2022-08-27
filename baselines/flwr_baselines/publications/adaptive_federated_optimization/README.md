@@ -60,3 +60,10 @@ To help visualize results, the script also plots evaluation curves. Here are som
 <img src="cifar10_fedavg.jpeg" alt="CIFAR10 - FedAvg" width="400" />
 <img src="cifar10_fedadam.jpeg" alt="CIFAR10 - FedAdam" width="400" />
 </center>
+
+
+
+python main.py --config-path conf/cifar10 strategy=fedavg
+
+
+
