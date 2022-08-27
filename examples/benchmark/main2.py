@@ -30,10 +30,6 @@ class FlowerClient(fl.client.NumPyClient):
 
         # Determine device
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # device_id = int(self.cid) % 8
-        # print(f"device id: {device_id}")
-        # self.device = torch.device(f"cuda:{device_id}")
-
 
     def get_parameters(self, config):
         return get_params(self.net)
@@ -143,8 +139,7 @@ if __name__ == "__main__":
 
     pool_size = 1000  # number of dataset partions (= number of total clients)
     client_resources = {
-        "num_cpus": args.num_client_cpus,
-        # "num_gpus": 0.5,
+        "num_cpus": args.num_client_cpus
     }  # each client will get allocated 1 CPUs
 
     # Download CIFAR-10 dataset
