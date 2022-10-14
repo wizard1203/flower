@@ -157,3 +157,14 @@ dmypy.json
 # Poetry
 poetry.lock
 *.pkl
+
+
+examples/benchmark/wandb/*
+examples/simulation_pytorch/wandb/*
+wandb
+./*/wandb
+./*/*/wandb
+*tar.gz
+benchmark/dataset/data/*
+
+

@@ -9,8 +9,9 @@ from PIL import Image
 
 from torchvision import transforms
 
-from .divide_data import DataPartitioner, select_dataset
+# from .divide_data import DataPartitioner, select_dataset
 
+from divide_data import DataPartitioner, select_dataset
 
 class FEMNIST():
     """

@@ -14,8 +14,35 @@ from utils import Net, train, test
 
 parser = argparse.ArgumentParser(description="Flower Simulation with PyTorch")
 
-parser.add_argument("--num_client_cpus", type=int, default=1)
-parser.add_argument("--num_rounds", type=int, default=5)
+parser.add_argument("--num_client_cpus", type=int, default=8)
+parser.add_argument("--num_rounds", type=int, default=50)
+
+# parser.add_argument("--data_dir", type=str, default="/home/chaoyanghe/FedScale/benchmark/dataset/data/femnist/data")
+parser.add_argument("--data_dir", type=str, default="/home/chaoyanghe/FedScale/benchmark/dataset/data/femnist")
+parser.add_argument("--num_class", type=int, default=62)
+parser.add_argument("--num_participants", type=int, default=100)
+parser.add_argument("--data_map_file", type=str, default="/home/chaoyanghe/FedScale/benchmark/dataset/data/femnist/client_data_mapping/train.csv")
+parser.add_argument("--task", type=str, default="cv")
+
+parser.add_argument("--model", type=str, default="resnet18")
+
+parser.add_argument("--client_optimizer", type=str, default="sgd")
+
+parser.add_argument("--dataset", type=str, default="femnist")
+parser.add_argument("--epochs", type=int, default=10)
+parser.add_argument("--batch_size", type=int, default=20)
+parser.add_argument("--run_name", type=str, default="fedml_optim_bench")
+
+parser.add_argument("--learning_rate", type=float, default=0.05)
+parser.add_argument("--frequency_of_the_test", type=int, default=10)
+parser.add_argument("--federated_optimizer", type=str, default="FedAvg")
+parser.add_argument("--num_loaders", type=int, default=4)
+
+# parser.add_argument("--enable_wandb", default=True)
+parser.add_argument("--wandb_entity", type=str, default="automl")
+parser.add_argument("--wandb_key", type=str, default="ee0b5f53d949c84cee7decbe7a629e63fb2f8408")
+parser.add_argument("--wandb_project", type=str, default="bench_optim")
+parser.add_argument("--wandb_name", type=str, default="fedml_optim_bench")
 
 
 # Flower client, adapted from Pytorch quickstart example
@@ -140,12 +167,13 @@ if __name__ == "__main__":
 
     # parse input arguments
     args = parser.parse_args()
+    args.enable_wandb = True
 
     pool_size = 1000  # number of dataset partions (= number of total clients)
     client_resources = {
         "num_cpus": args.num_client_cpus,
-        "num_gpus": 8,
-        # "num_gpus": 0.5,
+        # "num_gpus": 8,
+        "num_gpus": 0.5,
     }  # each client will get allocated 1 CPUs
 
     # Download CIFAR-10 dataset
@@ -178,6 +206,7 @@ if __name__ == "__main__":
         min_available_clients=pool_size,  # All clients should be available
         on_fit_config_fn=fit_config,
         evaluate_fn=get_evaluate_fn(testset),  # centralised evaluation of global model
+        args=args,
     )
 
     def client_fn(cid: str):

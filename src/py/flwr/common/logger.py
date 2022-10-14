@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional, Tuple
 LOGGER_NAME = "flower"
 FLOWER_LOGGER = logging.getLogger(LOGGER_NAME)
 FLOWER_LOGGER.setLevel(logging.DEBUG)
+# FLOWER_LOGGER.setLevel(logging.INFO)
 
 DEFAULT_FORMATTER = logging.Formatter(
     "%(levelname)s %(name)s %(asctime)s | %(filename)s:%(lineno)d | %(message)s"
@@ -30,6 +31,7 @@ DEFAULT_FORMATTER = logging.Formatter(
 # Configure console logger
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.DEBUG)
+# console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(DEFAULT_FORMATTER)
 FLOWER_LOGGER.addHandler(console_handler)
 

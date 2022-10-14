@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import numpy as np
 import torch
@@ -56,7 +57,7 @@ def get_dataloader(
     dataset = get_dataset(Path(path_to_data), cid, partition, transform=transform)
 
     # we use as number of workers all the cpu cores assigned to this actor
-    kwargs = {"num_workers": workers, "pin_memory": True, "drop_last": False}
+    kwargs = {"num_workers": workers, "pin_memory": False, "drop_last": False}
     return DataLoader(dataset, batch_size=batch_size, **kwargs)
 
 
@@ -150,12 +151,29 @@ def do_femnist_partitioning(path_to_dataset, pool_size, alpha, num_classes, args
     Path.mkdir(splits_dir, parents=True)
 
     for p in range(pool_size):
+        # create dir
+        # print(f"training_sets.partitions {list(training_sets.partitions)} ")
+        if p == len(training_sets.partitions):
+            break
+        Path.mkdir(splits_dir / str(p))
 
+        print(f"Saving client data {p} ")
         partition_indexes = training_sets.partitions[p]
-        partition_data = training_sets.data[partition_indexes]
+        # print(f"partition_indexes: {partition_indexes}")
+        # if p > 10:
+        #     break
+        partition_data = []
+        partition_targets = []
+        for index in partition_indexes:
+            # partition_data.append(training_sets.data.data[index])
+            # partition_targets.append(training_sets.data.targets[index])
+            img, target = training_sets.data[index]
+            partition_data.append(img)
+            partition_targets.append(target)
+
 
         with open(splits_dir / str(p) / "train.pt", "wb") as f:
-            torch.save(partition_data, f)
+            torch.save([partition_data, partition_targets], f)
     return splits_dir
 
 
@@ -194,9 +212,12 @@ class TorchVision_FL(VisionDataset):
         # to return a PIL Image
         if not isinstance(img, Image.Image):  # if not PIL image
             if not isinstance(img, np.ndarray):  # if torch tensor
-                img = img.numpy()
-
-            img = Image.fromarray(img)
+                if isinstance(img, str):
+                    # img = Image.open(os.path.join(self.root, img))
+                    img = Image.open(img)
+                else:
+                    img = img.numpy()
+                    img = Image.fromarray(img)
 
         if self.transform is not None:
             img = self.transform(img)

@@ -86,7 +86,8 @@ class Server:
         log(INFO, "Initializing global parameters")
         self.parameters = self._get_initial_parameters(timeout=timeout)
         log(INFO, "Evaluating initial parameters")
-        res = self.strategy.evaluate(0, parameters=self.parameters)
+        # res = self.strategy.evaluate(0, parameters=self.parameters)
+        res = None
         if res is not None:
             log(
                 INFO,
@@ -163,7 +164,7 @@ class Server:
             log(INFO, "evaluate_round %s: no clients selected, cancel", server_round)
             return None
         log(
-            DEBUG,
+            INFO,
             "evaluate_round %s: strategy sampled %s clients (out of %s)",
             server_round,
             len(client_instructions),
@@ -177,7 +178,7 @@ class Server:
             timeout=timeout,
         )
         log(
-            DEBUG,
+            INFO,
             "evaluate_round %s received %s results and %s failures",
             server_round,
             len(results),
@@ -213,7 +214,7 @@ class Server:
             log(INFO, "fit_round %s: no clients selected, cancel", server_round)
             return None
         log(
-            DEBUG,
+            INFO,
             "fit_round %s: strategy sampled %s clients (out of %s)",
             server_round,
             len(client_instructions),
@@ -227,7 +228,7 @@ class Server:
             timeout=timeout,
         )
         log(
-            DEBUG,
+            INFO,
             "fit_round %s received %s results and %s failures",
             server_round,
             len(results),

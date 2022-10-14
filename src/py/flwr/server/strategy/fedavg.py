@@ -21,6 +21,10 @@ Paper: https://arxiv.org/abs/1602.05629
 from logging import WARNING
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+import time
+import wandb
+
+
 from flwr.common import (
     EvaluateIns,
     EvaluateRes,
@@ -39,6 +43,8 @@ from flwr.server.client_proxy import ClientProxy
 
 from .aggregate import aggregate, weighted_loss_avg
 from .strategy import Strategy
+from .wandb_utils import wandb_init
+
 
 WARNING_MIN_AVAILABLE_CLIENTS_TOO_LOW = """
 Setting `min_available_clients` lower than `min_fit_clients` or
@@ -72,6 +78,7 @@ class FedAvg(Strategy):
         initial_parameters: Optional[Parameters] = None,
         fit_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
+        args = None,
     ) -> None:
         """Federated Averaging strategy.
 
@@ -129,6 +136,10 @@ class FedAvg(Strategy):
         self.initial_parameters = initial_parameters
         self.fit_metrics_aggregation_fn = fit_metrics_aggregation_fn
         self.evaluate_metrics_aggregation_fn = evaluate_metrics_aggregation_fn
+        self.args = args
+        if self.args.enable_wandb:
+            wandb_init(args)
+            self.previous_time = time.time()
 
     def __repr__(self) -> str:
         rep = f"FedAvg(accept_failures={self.accept_failures})"
@@ -160,11 +171,20 @@ class FedAvg(Strategy):
         if self.evaluate_fn is None:
             # No evaluation function provided
             return None
-        parameters_ndarrays = parameters_to_ndarrays(parameters)
-        eval_res = self.evaluate_fn(server_round, parameters_ndarrays, {})
-        if eval_res is None:
+
+        if server_round % self.args.frequency_of_the_test == 0:
+            current_time = time.time()
+            parameters_ndarrays = parameters_to_ndarrays(parameters)
+            eval_res = self.evaluate_fn(server_round, parameters_ndarrays, {})
+            if eval_res is None:
+                return None
+            loss, metrics = eval_res
+            if self.args.enable_wandb:
+                wandb.log({"Test/Acc": metrics["accuracy"], "round": server_round,
+                    "Test/Loss": loss, "TestTimeOneRound": time.time() - current_time})
+        else:
             return None
-        loss, metrics = eval_res
+
         return loss, metrics
 
     def configure_fit(
@@ -242,7 +262,12 @@ class FedAvg(Strategy):
         elif server_round == 1:  # Only log this warning once
             log(WARNING, "No fit_metrics_aggregation_fn provided")
 
+        if self.args.enable_wandb:
+            wandb.log({"RunTimeOneRound": time.time() - self.previous_time, "round": server_round})
+            self.previous_time = time.time()
+
         return parameters_aggregated, metrics_aggregated
+
 
     def aggregate_evaluate(
         self,

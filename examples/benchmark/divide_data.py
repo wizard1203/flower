@@ -90,6 +90,9 @@ class DataPartitioner(object):
 
         for idx in range(sample_id):
             self.partitions[clientId_maps[idx]].append(idx)
+            print(f"client: {clientId_maps[idx]} obtain data id: {idx}")
+        print(f"clientId_maps has length: {len(self.partitions)}, total samples: {sample_id}")
+
 
     def partition_data_helper(self, num_clients, data_map_file=None):
 

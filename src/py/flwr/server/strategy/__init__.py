@@ -25,6 +25,7 @@ from .fedopt import FedOpt as FedOpt
 from .fedyogi import FedYogi as FedYogi
 from .qfedavg import QFedAvg as QFedAvg
 from .strategy import Strategy as Strategy
+from .wandb_utils import wandb_init as wandb_init
 
 __all__ = [
     "FaultTolerantFedAvg",
@@ -37,4 +38,5 @@ __all__ = [
     "FedYogi",
     "QFedAvg",
     "Strategy",
+    "wandb_init",
 ]

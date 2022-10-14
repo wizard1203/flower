@@ -6,7 +6,7 @@ cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"/
 python -c "from torchvision.datasets import CIFAR10; CIFAR10('./data', download=True)"
 
 echo "Start simulation"
-python main.py &
+python main2.py &
 
 # Enable CTRL+C to stop all background processes
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM
